@@ -3,27 +3,20 @@
 generate_manifest.py
 ────────────────────
 Chạy script này sau khi download dataset từ Kaggle về máy local.
-Output: public/manifest.json + ảnh được copy vào public/images/
+Output: public/manifests/btrxd.json + ảnh được copy vào public/images/
 
 Usage:
   python generate_manifest.py --dataset /path/to/kaggle/dataset --output ./public
 
-Dataset structure expected (BTRXD / Brain Tumor MRI):
+Dataset structure expected:
   dataset/
     Training/
-      glioma/         ← ảnh gốc
-      meningioma/
-      pituitary/
-      notumor/
+      <category>/     ← ảnh gốc
     Testing/
-      glioma/
-      meningioma/
-      pituitary/
-      notumor/
+      <category>/
 
   (Optional) Nếu có mask riêng:
-    dataset_masks/
-      Training/glioma/...
+    dataset_masks/Training/<category>/...
       ...
 
 Nếu không có mask sẵn, script sẽ tạo pseudo-mask bằng Otsu threshold.
@@ -54,12 +47,8 @@ except ImportError:
     HAS_OPENPYXL = False
 
 CATEGORY_CONFIG = {
-    "glioma":     {"label": "Glioma",      "color": "#ff4444", "description": "Khối u tế bào glial, thường ác tính"},
-    "meningioma": {"label": "Meningioma",   "color": "#ffa500", "description": "Khối u màng não, thường lành tính"},
-    "pituitary":  {"label": "Pituitary",    "color": "#8b5cf6", "description": "Khối u tuyến yên"},
-    "notumor":    {"label": "No Tumor",     "color": "#00ff88", "description": "Ảnh não bình thường"},
-    "no_tumor":   {"label": "No Tumor",     "color": "#00ff88", "description": "Ảnh não bình thường"},
-    # Thêm categories của dataset bạn vào đây
+    # Optional per-category metadata overrides.
+    # Unknown categories are handled automatically with a generic label/description.
 }
 
 SPLIT_MAP = {
@@ -334,7 +323,9 @@ def generate_manifest_from_labels(
         "samples": samples,
     }
 
-    manifest_path = output_path / "manifest.json"
+    manifests_out = output_path / "manifests"
+    manifests_out.mkdir(parents=True, exist_ok=True)
+    manifest_path = manifests_out / "btrxd.json"
     with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, ensure_ascii=False, indent=2)
 
@@ -349,7 +340,7 @@ def generate_manifest_from_labels(
         print(f"   3. Run app: npm run dev")
     else:
         print(f"   1. Use generated images in next.js project: public/images/")
-        print(f"   2. Keep manifest at: public/manifest.json")
+        print(f"   2. Keep manifest at: public/manifests/btrxd.json")
         print(f"   3. Run app: npm run dev")
 
 
@@ -493,7 +484,9 @@ def generate_manifest(dataset_dir: str, output_dir: str, mask_dir: str = None,
         "samples": samples,
     }
     
-    manifest_path = output_path / "manifest.json"
+    manifests_out = output_path / "manifests"
+    manifests_out.mkdir(parents=True, exist_ok=True)
+    manifest_path = manifests_out / "btrxd.json"
     with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, ensure_ascii=False, indent=2)
     
@@ -508,7 +501,7 @@ def generate_manifest(dataset_dir: str, output_dir: str, mask_dir: str = None,
         print(f"   3. Run app: npm run dev")
     else:
         print(f"   1. Use generated images in next.js project: public/images/")
-        print(f"   2. Keep manifest at: public/manifest.json")
+        print(f"   2. Keep manifest at: public/manifests/btrxd.json")
         print(f"   3. Run app: npm run dev")
 
 if __name__ == "__main__":

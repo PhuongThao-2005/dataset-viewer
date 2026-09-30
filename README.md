@@ -1,115 +1,139 @@
 # BTRXD Viewer
 
-Basic Next.js website to browse BTRXD-style brain MRI images by category, with before/after mask comparison.
+Multi-dataset medical X-ray segmentation viewer built with Next.js. The app can browse categories, search sample IDs, inspect masks, and view lesion metadata from static JSON manifests.
 
-## Folder Structure
+Currently supported dataset slots:
+
+- `BTRXD`
+- `FracAtlas`
+
+## Manifest Structure
+
+The viewer reads dataset manifests from:
 
 ```text
-BTRXD_viewer/
-  public/
-    images/
-      <category>/
-        original/
-        mask/
-    manifest.json
-  scripts/
-    generate_manifest.py
-  src/
-    components/
-    data/
-    pages/
-    styles/
+public/
+  manifests/
+    btrxd.json
+    fracatlas.json
+    fracatlas.example.json
 ```
 
-## Dataset Processing Flow (Kaggle -> Viewer)
+`public/manifests/btrxd.json` is the current BTRXD manifest. `public/manifests/fracatlas.json` is optional; if it does not exist, the app still builds and the FracAtlas option is shown as not generated.
 
-1. Download dataset from Kaggle to local machine.
-2. Run `scripts/generate_manifest.py` to:
-  - copy/resize source images into `public/images/...`
-  - create or copy masks into `public/images/.../mask`
-  - generate `public/manifest.json`
-3. Start app with `npm run dev` (or deploy to Vercel).
+The legacy `public/manifest.json` path is still accepted as a fallback for BTRXD during transition, but new generated manifests should use `public/manifests/btrxd.json`.
 
-## Quick Local Test
+## Manifest Schema
 
-1. Install dependencies:
+Each sample uses the generic schema:
 
-```bash
-npm install
+```ts
+{
+  id: string;
+  dataset: 'btrxd' | 'fracatlas';
+  category: string;
+  status?: 'positive' | 'normal';
+  split?: 'train' | 'val' | 'test';
+  originalPath: string;
+  maskPath?: string;
+  overlayPath?: string;
+  lesions?: Array<{
+    id: string;
+    areaPx?: number;
+    areaRatio?: number;
+    bbox?: number[];
+    sizeGroup?: 'small' | 'medium' | 'large';
+  }>;
+  metadata?: {
+    width?: number;
+    height?: number;
+    filename?: string;
+    source?: string;
+    notes?: string;
+    nLesions?: number;
+    unionAreaPx?: number;
+    unionAreaRatio?: number;
+  };
+}
 ```
 
-1. Generate a small manifest for testing:
+Image paths can be local public paths such as `/images/...` or absolute cloud URLs.
 
-```bash
-python scripts/generate_manifest.py --dataset "D:/datasets/BTRXD" --output "./public" --max 30
-```
+## Dataset Processing Flow
 
-1. Run:
+1. Download or prepare the dataset locally.
+2. Generate or export a manifest into `public/manifests/<dataset>.json`.
+3. Store images locally under `public/images/...` for small tests, or upload them to object storage and keep cloud URLs in the manifest.
+4. Run the app.
 
-```bash
-npm run dev
-```
+## BTRXD Generation
 
-1. Open `http://localhost:3000`
-
-## Cloud Storage Setup (recommended for Vercel)
-
-Use this mode when dataset is large.
-
-1. Generate optimized images + manifest with cloud URLs:
-
-```bash
-python scripts/generate_manifest.py --dataset "D:/datasets/BTRXD" --output "./public" --cloud-base-url "https://your-cdn-domain.com" --cloud-prefix "images"
-```
-
-1. Upload local folder `public/images/` to cloud storage at:
-  - `https://your-cdn-domain.com/images/...`
-2. Keep `public/manifest.json` in this project (do not upload raw dataset to Vercel).
-3. Deploy app to Vercel normally.
-
-The app will read `manifest.json`, and each sample image path will point to your cloud URL.
-
-## If Your Labels Are Only In `dataset.xlsx`
-
-If folders are just `images/` and `masks/` (no class subfolders), use XLSX mode:
-
-```bash
-python scripts/generate_manifest.py --dataset "D:/datasets/BTRXD/images" --masks "D:/datasets/BTRXD/masks" --labels-xlsx "D:/datasets/BTRXD/dataset.xlsx" --image-col "image" --mask-col "mask" --class-col "class" --split-col "split" --output "./public" --cloud-base-url "https://your-cdn-domain.com" --cloud-prefix "images"
-```
-
-Notes:
-
-- `--image-col`, `--mask-col`, `--class-col`, `--split-col` must match your XLSX header names.
-- If your XLSX has no split column, remove `--split-col ...` and add `--default-split train`.
-- If image/mask values in XLSX include absolute paths, script will also try basename fallback.
-
-For one-hot labels (no single `class` column), use:
-
-```bash
-python scripts/generate_manifest.py --dataset "D:/datasets/BTRXD/images" --masks "D:/datasets/BTRXD/masks" --labels-xlsx "D:/datasets/BTRXD/dataset.xlsx" --image-col "image_id" --class-onehot-cols "osteochondroma,multiple osteochondromas,simple bone cyst,giant cell tumor,osteofibroma,synovial osteochondroma,other bt,osteosarcoma,other mt" --default-split train --output "./public"
-```
-
-## Example Commands
+The existing script now writes BTRXD manifests to `public/manifests/btrxd.json` and image assets to `public/images/...`:
 
 ```bash
 python scripts/generate_manifest.py --dataset "D:/datasets/BTRXD" --output "./public"
 ```
 
-Optional:
+Cloud URL mode:
 
 ```bash
-python scripts/generate_manifest.py --dataset "D:/datasets/BTRXD" --masks "D:/datasets/BTRXD_masks" --output "./public" --max 50
+python scripts/generate_manifest.py --dataset "D:/datasets/BTRXD" --output "./public" --cloud-base-url "https://your-cdn-domain.com" --cloud-prefix "images"
 ```
 
-Cloud URL + separate masks:
+For XLSX labels:
 
 ```bash
-python scripts/generate_manifest.py --dataset "D:/datasets/BTRXD" --masks "D:/datasets/BTRXD_masks" --output "./public" --cloud-base-url "https://your-cdn-domain.com" --cloud-prefix "images"
+python scripts/generate_manifest.py --dataset "D:/datasets/BTRXD/images" --masks "D:/datasets/BTRXD/masks" --labels-xlsx "D:/datasets/BTRXD/dataset.xlsx" --image-col "image" --mask-col "mask" --class-col "class" --split-col "split" --output "./public"
 ```
 
-## Vercel Notes
+For one-hot labels:
 
-- Keep image size optimized (script already resizes large images).
-- For very large datasets, store images on cloud object storage (S3/R2) and keep only `manifest.json` in the app.
-- Commit code only; avoid committing huge raw Kaggle dataset folders.
+```bash
+python scripts/generate_manifest.py --dataset "D:/datasets/BTRXD/images" --masks "D:/datasets/BTRXD/masks" --labels-xlsx "D:/datasets/BTRXD/dataset.xlsx" --image-col "image_id" --class-onehot-cols "osteochondroma,multiple osteochondromas,simple bone cyst,giant cell tumor,osteofibroma,synovial osteochondroma,other bt,osteosarcoma,other mt" --default-split train --output "./public"
+```
 
+## FracAtlas
+
+FracAtlas should generate:
+
+```text
+public/manifests/fracatlas.json
+```
+
+Expected categories are:
+
+- `fractured`
+- `normal`
+
+Use `public/manifests/fracatlas.example.json` as a small reference manifest with one fractured sample containing two lesions and one normal sample.
+
+## Adding A Dataset
+
+1. Add a new manifest file under `public/manifests/`.
+2. Use stable category IDs and include a `categories` array when possible.
+3. Include `status`, `lesions`, and area ratios only when they are available.
+4. Add the dataset ID to `DATASET_CONFIGS` in `src/pages/index.tsx`.
+
+Statistics, category filters, status filters, lesion count filters, grid cards, and the lightbox are computed from the selected manifest. Avoid hard-coding dataset counts in the frontend.
+
+## Local Development
+
+```bash
+npm install
+npm run dev
+```
+
+Open `http://localhost:3000`.
+
+## Build Check
+
+```bash
+npm run build
+```
+
+## Deployment Notes
+
+- Do not commit raw datasets or thousands of image files.
+- Keep large image assets in cloud storage such as S3, R2, or a CDN.
+- Commit code and small manifest files only.
+- `public/images` is ignored by git.

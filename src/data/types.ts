@@ -1,25 +1,42 @@
-// src/data/types.ts
+export type DatasetId = 'btrxd' | 'fracatlas';
+
+export interface LesionInfo {
+  id: string;
+  areaPx?: number;
+  areaRatio?: number;
+  bbox?: number[];
+  sizeGroup?: 'small' | 'medium' | 'large';
+}
+
 export interface ImageSample {
   id: string;
-  category: string;       // e.g. "glioma", "meningioma", "pituitary", "no_tumor"
-  subcategory?: string;   // optional finer label
-  split: 'train' | 'test' | 'val';
-  originalPath: string;   // path to original image (relative to /public/images/)
-  maskPath: string;       // path to mask image (relative to /public/images/)
+  dataset: DatasetId;
+  category: string;
+  status?: 'positive' | 'normal';
+  split?: 'train' | 'test' | 'val';
+  originalPath: string;
+  maskPath?: string;
+  overlayPath?: string;
+  lesions?: LesionInfo[];
   metadata?: {
     width?: number;
     height?: number;
+    filename?: string;
     source?: string;
     notes?: string;
+    nLesions?: number;
+    unionAreaPx?: number;
+    unionAreaRatio?: number;
   };
 }
 
 export interface DataManifest {
+  id?: DatasetId;
   name: string;
   description: string;
   categories: CategoryMeta[];
   samples: ImageSample[];
-  generatedAt: string;
+  generatedAt?: string;
 }
 
 export interface CategoryMeta {

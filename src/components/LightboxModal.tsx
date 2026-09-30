@@ -9,7 +9,20 @@ interface Props {
   onNext?: () => void;
 }
 
+function formatAreaRatio(value: number) {
+  const percent = value <= 1 ? value * 100 : value;
+  return `${percent.toFixed(2)}%`;
+}
+
 export default function LightboxModal({ sample, category, onClose, onPrev, onNext }: Props) {
+  const lesionCount = sample.metadata?.nLesions ?? sample.lesions?.length;
+  const lesionRatios = sample.lesions?.filter(lesion => typeof lesion.areaRatio === 'number') ?? [];
+  const annotation = sample.overlayPath
+    ? { title: 'GT OVERLAY', src: sample.overlayPath, alt: 'Ground truth overlay' }
+    : sample.maskPath
+      ? { title: 'SEGMENTATION MASK', src: sample.maskPath, alt: 'Segmentation mask' }
+      : { title: 'No annotation', src: undefined, alt: 'No annotation' };
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -20,6 +33,30 @@ export default function LightboxModal({ sample, category, onClose, onPrev, onNex
     return () => window.removeEventListener('keydown', handler);
   }, [onClose, onPrev, onNext]);
 
+  const renderPanel = (title: string, src: string | undefined, alt: string, color = '#64748b') => (
+    <div className="p-4">
+      <div className="text-xs font-mono mb-2 flex items-center gap-2" style={{ color }}>
+        <span className="w-2 h-2 rounded-full" style={{ background: color }} />
+        {title}
+      </div>
+      <div className="rounded-lg overflow-hidden flex items-center justify-center" style={{ background: '#0f172a', minHeight: '260px' }}>
+        {src ? (
+      <img
+        src={src}
+        alt={alt}
+        className="w-full h-auto object-contain"
+        style={{ maxHeight: 'min(56vh, 460px)' }}
+        onError={(e) => {
+          (e.target as HTMLImageElement).style.display = 'none';
+        }}
+      />
+        ) : (
+          <div className="text-xs font-mono text-[#64748b] py-24">{title}</div>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -27,7 +64,7 @@ export default function LightboxModal({ sample, category, onClose, onPrev, onNex
       onClick={onClose}
     >
       <div
-        className="w-full max-w-5xl rounded-2xl overflow-hidden"
+        className="w-full max-w-4xl rounded-2xl overflow-hidden"
         style={{ background: '#111827', border: '1px solid #334155' }}
         onClick={e => e.stopPropagation()}
       >
@@ -47,48 +84,30 @@ export default function LightboxModal({ sample, category, onClose, onPrev, onNex
           </button>
         </div>
 
-        {/* Images side by side */}
-        <div className="grid grid-cols-2 gap-0">
-          <div className="p-4 border-r border-[#334155]">
-            <div className="text-xs font-mono text-[#64748b] mb-2 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-[#64748b]" />
-              ORIGINAL SCAN
-            </div>
-            <div className="rounded-lg overflow-hidden" style={{ background: '#0f172a' }}>
-              <img
-                src={sample.originalPath}
-                alt="Original"
-                className="w-full h-auto object-contain"
-                style={{ maxHeight: '400px' }}
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = 'none';
-                }}
-              />
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
+          <div className="border-b md:border-b-0 md:border-r border-[#334155]">
+            {renderPanel('ORIGINAL SCAN', sample.originalPath, 'Original scan')}
           </div>
-
-          <div className="p-4">
-            <div className="text-xs font-mono text-[#93c5fd] mb-2 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-[#93c5fd] pulse-dot" />
-              SEGMENTATION MASK
-            </div>
-            <div className="rounded-lg overflow-hidden" style={{ background: '#0f172a' }}>
-              <img
-                src={sample.maskPath}
-                alt="Mask"
-                className="w-full h-auto object-contain"
-                style={{ maxHeight: '400px' }}
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = 'none';
-                }}
-              />
-            </div>
-          </div>
+          {renderPanel(annotation.title, annotation.src, annotation.alt, '#93c5fd')}
         </div>
 
         {/* Metadata footer */}
-        <div className="px-6 py-4 border-t border-[#334155] flex items-center justify-between">
-          <div className="flex items-center gap-6 text-xs font-mono text-[#64748b]">
+        <div className="px-6 py-4 border-t border-[#334155] flex items-start justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs font-mono text-[#64748b]">
+            {sample.metadata?.width && sample.metadata?.height && (
+              <span>Resolution: <span className="text-[#e2e8f0]">{sample.metadata.width}x{sample.metadata.height}</span></span>
+            )}
+            {typeof lesionCount === 'number' && (
+              <span>Lesions: <span className="text-[#e2e8f0]">{lesionCount}</span></span>
+            )}
+            {typeof sample.metadata?.unionAreaRatio === 'number' && (
+              <span>Union area: <span className="text-[#e2e8f0]">{formatAreaRatio(sample.metadata.unionAreaRatio)}</span></span>
+            )}
+            {lesionRatios.map((lesion, idx) => (
+              <span key={lesion.id || idx}>
+                {lesion.id || `L${idx + 1}`}: <span className="text-[#e2e8f0]">{formatAreaRatio(lesion.areaRatio as number)}</span>
+              </span>
+            ))}
             {sample.metadata?.source && (
               <span>Source: <span className="text-[#e2e8f0]">{sample.metadata.source}</span></span>
             )}
