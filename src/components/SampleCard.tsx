@@ -12,6 +12,12 @@ function formatAreaRatio(value: number) {
   return `${percent.toFixed(2)}%`;
 }
 
+function getSizeGroupColor(sizeGroup: 'small' | 'medium' | 'large') {
+  if (sizeGroup === 'small') return '#22d3ee';
+  if (sizeGroup === 'medium') return '#facc15';
+  return '#fb923c';
+}
+
 export default function SampleCard({ sample, category, onClick }: Props) {
   const [hovered, setHovered] = useState(false);
   const [failedPreviews, setFailedPreviews] = useState<Set<'overlay' | 'mask'>>(new Set());
@@ -22,7 +28,9 @@ export default function SampleCard({ sample, category, onClick }: Props) {
       : sample.maskPath && !failedPreviews.has('mask')
         ? { src: sample.maskPath, label: 'MASK', alt: 'Mask', type: 'mask' as const }
         : { src: sample.originalPath, label: 'ORIG', alt: 'Original scan', type: 'original' as const };
-  const lesionRatios = sample.lesions?.filter(lesion => typeof lesion.areaRatio === 'number') ?? [];
+  const lesionRows = sample.lesions?.filter(lesion =>
+    typeof lesion.areaRatio === 'number' || Boolean(lesion.sizeGroup)
+  ) ?? [];
 
   return (
     <div
@@ -79,11 +87,20 @@ export default function SampleCard({ sample, category, onClick }: Props) {
             {lesionCount} {lesionCount === 1 ? 'lesion' : 'lesions'}
           </p>
         )}
-        {lesionRatios.length > 0 && (
+        {lesionRows.length > 0 && (
           <div className="mt-1 space-y-0.5">
-            {lesionRatios.slice(0, 3).map((lesion, idx) => (
+            {lesionRows.slice(0, 3).map((lesion, idx) => (
               <div key={lesion.id || idx} className="text-[10px] text-[#64748b] font-mono truncate">
-                {lesion.id || `L${idx + 1}`}: {formatAreaRatio(lesion.areaRatio as number)}
+                {lesion.id || `L${idx + 1}`}:
+                {typeof lesion.areaRatio === 'number' && (
+                  <span> {formatAreaRatio(lesion.areaRatio)}</span>
+                )}
+                {lesion.sizeGroup && (
+                  <span style={{ color: getSizeGroupColor(lesion.sizeGroup) }}>
+                    {typeof lesion.areaRatio === 'number' ? ' · ' : ' '}
+                    {lesion.sizeGroup.toUpperCase()}
+                  </span>
+                )}
               </div>
             ))}
           </div>

@@ -21,6 +21,7 @@ interface Props {
 
 type StatusFilter = 'all' | 'positive' | 'normal';
 type LesionCountFilter = 'all' | 'one' | 'multi';
+type SizeFilter = 'all' | 'small' | 'medium' | 'large';
 type SortMode = 'default' | 'smallest_lesion' | 'largest_lesion';
 
 const PAGE_SIZE = 24;
@@ -55,6 +56,13 @@ function getSmallestLesionRatio(sample: ImageSample) {
   return Math.min(...ratios);
 }
 
+function getSizeThresholdText(dataset: DatasetId) {
+  if (dataset === 'fracatlas') {
+    return 'Small < 0.177% | Medium 0.177%-0.347% | Large >= 0.347%';
+  }
+  return 'Small < 0.304% | Medium 0.304%-1.791% | Large >= 1.791%';
+}
+
 export default function Home({ manifests, datasetOptions, initialDataset }: Props) {
   const [activeDataset, setActiveDataset] = useState<DatasetId>(initialDataset);
   const manifest = manifests[activeDataset] || manifests[initialDataset] || FALLBACK_MANIFEST;
@@ -71,6 +79,7 @@ export default function Home({ manifests, datasetOptions, initialDataset }: Prop
   const [activeCat, setActiveCat] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [lesionCountFilter, setLesionCountFilter] = useState<LesionCountFilter>('all');
+  const [sizeFilter, setSizeFilter] = useState<SizeFilter>('all');
   const [sortMode, setSortMode] = useState<SortMode>('default');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -78,11 +87,16 @@ export default function Home({ manifests, datasetOptions, initialDataset }: Prop
 
   const hasStatus = samples.some(s => Boolean(s.status));
   const hasAreaRatios = samples.some(s => s.lesions?.some(lesion => typeof lesion.areaRatio === 'number'));
+  const hasSizeGroups = samples.some(sample =>
+    sample.lesions?.some(lesion => Boolean(lesion.sizeGroup))
+  );
+  const sizeThresholdText = getSizeThresholdText(activeDataset);
 
   useEffect(() => {
     setActiveCat(null);
     setStatusFilter('all');
     setLesionCountFilter('all');
+    setSizeFilter('all');
     setSortMode('default');
     setSearch('');
     setPage(1);
@@ -95,6 +109,12 @@ export default function Home({ manifests, datasetOptions, initialDataset }: Prop
       if (statusFilter !== 'all' && s.status !== statusFilter) return false;
       if (lesionCountFilter === 'one' && getLesionCount(s) !== 1) return false;
       if (lesionCountFilter === 'multi' && getLesionCount(s) < 2) return false;
+      if (
+        sizeFilter !== 'all' &&
+        !s.lesions?.some(lesion => lesion.sizeGroup === sizeFilter)
+      ) {
+        return false;
+      }
       if (search && !s.id.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
@@ -108,7 +128,7 @@ export default function Home({ manifests, datasetOptions, initialDataset }: Prop
       if (bRatio === null) return -1;
       return sortMode === 'smallest_lesion' ? aRatio - bRatio : bRatio - aRatio;
     });
-  }, [samples, activeCat, statusFilter, lesionCountFilter, search, sortMode]);
+  }, [samples, activeCat, statusFilter, lesionCountFilter, sizeFilter, search, sortMode]);
 
   const paginated = useMemo(() => {
     return filtered.slice(0, page * PAGE_SIZE);
@@ -272,6 +292,26 @@ export default function Home({ manifests, datasetOptions, initialDataset }: Prop
               <option value="one">1 lesion</option>
               <option value="multi">2+ lesions</option>
             </select>
+
+            {hasSizeGroups && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <select
+                  value={sizeFilter}
+                  onChange={e => { setSizeFilter(e.target.value as SizeFilter); setPage(1); }}
+                  className="px-3 py-2 rounded-lg text-xs font-mono outline-none"
+                  style={{ background: '#1f2937', border: '1px solid #334155', color: '#e2e8f0' }}
+                  title={sizeThresholdText}
+                >
+                  <option value="all">All Sizes</option>
+                  <option value="small">Small</option>
+                  <option value="medium">Medium</option>
+                  <option value="large">Large</option>
+                </select>
+                <span className="text-[10px] font-mono text-[#64748b]" title={sizeThresholdText}>
+                  {sizeThresholdText}
+                </span>
+              </div>
+            )}
 
             {hasAreaRatios && (
               <select

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { ImageSample, CategoryMeta } from '@/data/types';
 
 interface Props {
@@ -14,9 +14,18 @@ function formatAreaRatio(value: number) {
   return `${percent.toFixed(2)}%`;
 }
 
+function getSizeGroupColor(sizeGroup: 'small' | 'medium' | 'large') {
+  if (sizeGroup === 'small') return '#22d3ee';
+  if (sizeGroup === 'medium') return '#facc15';
+  return '#fb923c';
+}
+
 export default function LightboxModal({ sample, category, onClose, onPrev, onNext }: Props) {
+  const [zoom, setZoom] = useState(1);
   const lesionCount = sample.metadata?.nLesions ?? sample.lesions?.length;
-  const lesionRatios = sample.lesions?.filter(lesion => typeof lesion.areaRatio === 'number') ?? [];
+  const lesionDetails = sample.lesions?.filter(lesion =>
+    typeof lesion.areaRatio === 'number' || Boolean(lesion.sizeGroup)
+  ) ?? [];
   const annotation = sample.overlayPath
     ? { title: 'GT OVERLAY', src: sample.overlayPath, alt: 'Ground truth overlay' }
     : sample.maskPath
@@ -33,23 +42,40 @@ export default function LightboxModal({ sample, category, onClose, onPrev, onNex
     return () => window.removeEventListener('keydown', handler);
   }, [onClose, onPrev, onNext]);
 
+  useEffect(() => {
+    setZoom(1);
+  }, [sample.id]);
+
+  const changeZoom = (delta: number) => {
+    setZoom(current => Math.max(1, Math.min(3, Number((current + delta).toFixed(2)))));
+  };
+
+  const zoomPercent = Math.round(zoom * 100);
+
   const renderPanel = (title: string, src: string | undefined, alt: string, color = '#64748b') => (
     <div className="p-4">
       <div className="text-xs font-mono mb-2 flex items-center gap-2" style={{ color }}>
         <span className="w-2 h-2 rounded-full" style={{ background: color }} />
         {title}
       </div>
-      <div className="rounded-lg overflow-hidden flex items-center justify-center" style={{ background: '#0f172a', minHeight: '260px' }}>
+      <div
+        className={`rounded-lg overflow-auto flex ${zoom > 1 ? 'items-start justify-start' : 'items-center justify-center'}`}
+        style={{ background: '#0f172a', minHeight: '260px', maxHeight: 'min(56vh, 460px)' }}
+      >
         {src ? (
-      <img
-        src={src}
-        alt={alt}
-        className="w-full h-auto object-contain"
-        style={{ maxHeight: 'min(56vh, 460px)' }}
-        onError={(e) => {
-          (e.target as HTMLImageElement).style.display = 'none';
-        }}
-      />
+          <img
+            src={src}
+            alt={alt}
+            className="h-auto object-contain"
+            style={{
+              width: `${zoom * 100}%`,
+              maxWidth: 'none',
+              maxHeight: zoom === 1 ? 'min(56vh, 460px)' : 'none',
+            }}
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = 'none';
+            }}
+          />
         ) : (
           <div className="text-xs font-mono text-[#64748b] py-24">{title}</div>
         )}
@@ -76,12 +102,37 @@ export default function LightboxModal({ sample, category, onClose, onPrev, onNex
             <span className="text-[#64748b] font-mono text-sm">→</span>
             <span className="text-sm font-mono text-[#e2e8f0]">{sample.id}</span>
           </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#64748b] hover:text-white hover:bg-[#1e2d47] transition-colors"
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => changeZoom(-0.25)}
+              disabled={zoom <= 1}
+              className="px-2.5 py-1.5 rounded-lg text-xs font-mono text-[#64748b] hover:text-white border border-[#334155] hover:border-[#93c5fd66] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Zoom out"
+            >
+              -
+            </button>
+            <button
+              onClick={() => setZoom(1)}
+              className="min-w-14 px-2.5 py-1.5 rounded-lg text-xs font-mono text-[#93c5fd] border border-[#334155] hover:border-[#93c5fd66] transition-all"
+              title="Reset zoom"
+            >
+              {zoomPercent}%
+            </button>
+            <button
+              onClick={() => changeZoom(0.25)}
+              disabled={zoom >= 3}
+              className="px-2.5 py-1.5 rounded-lg text-xs font-mono text-[#64748b] hover:text-white border border-[#334155] hover:border-[#93c5fd66] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Zoom in"
+            >
+              +
+            </button>
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-[#64748b] hover:text-white hover:bg-[#1e2d47] transition-colors"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
@@ -103,9 +154,18 @@ export default function LightboxModal({ sample, category, onClose, onPrev, onNex
             {typeof sample.metadata?.unionAreaRatio === 'number' && (
               <span>Union area: <span className="text-[#e2e8f0]">{formatAreaRatio(sample.metadata.unionAreaRatio)}</span></span>
             )}
-            {lesionRatios.map((lesion, idx) => (
+            {lesionDetails.map((lesion, idx) => (
               <span key={lesion.id || idx}>
-                {lesion.id || `L${idx + 1}`}: <span className="text-[#e2e8f0]">{formatAreaRatio(lesion.areaRatio as number)}</span>
+                {lesion.id || `L${idx + 1}`}:
+                {typeof lesion.areaRatio === 'number' && (
+                  <span className="text-[#e2e8f0]"> {formatAreaRatio(lesion.areaRatio)}</span>
+                )}
+                {lesion.sizeGroup && (
+                  <span style={{ color: getSizeGroupColor(lesion.sizeGroup) }}>
+                    {typeof lesion.areaRatio === 'number' ? ' · ' : ' '}
+                    {lesion.sizeGroup.toUpperCase()}
+                  </span>
+                )}
               </span>
             ))}
             {sample.metadata?.source && (
